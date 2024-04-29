@@ -1,35 +1,40 @@
 // src/consumers/commands.rs
 
 use crate::db::Store;
-use crate::domain::Message;
-use crate::domain::commands::{Command, Open, Close};
+use crate::messaging::Handler;
+use crate::messaging::Consumer;
 use axum::async_trait;
+use tracing::{info, error};
+use std::sync::Arc;
 
-pub struct CommandsConsumer {
+pub struct CommandsConsumer<T: Handler> {
+
     store: Store,
+    handler: T,
 }
 
-impl CommandsConsumer {
-    pub fn new(store: Store) -> Self {
-        CommandsConsumer { store }
+impl<T: Handler> CommandsConsumer<T> {
+    pub fn new(store: Store, handler: T) -> Self {
+        CommandsConsumer { store, handler }
     }
+}
 
-    pub async fn start(&self, stream_name: &str) {
-        self.store.subscribe_to_stream(stream_name, |message| {
-            println!("Processing message: {:?}", message);
-            // let command: Box<dyn Command> = self.deserialize_command(&message.data).await;
-            // self.dispatch(command).await;
+#[async_trait]
+impl<T: Handler + Send + Sync + Clone + 'static> Consumer for CommandsConsumer<T> {
+    async fn start(&self, stream_name: &str) -> Result<(), String> {
+        let handler = Arc::new(self.handler.clone());
+        self.store.subscribe_to_stream(stream_name, move |message| {
+            let handler_clone = handler.clone();
+            Box::pin(async move {
+                let message_type = message.message_type.clone();
+                if let Err(e) = handler_clone.handle(message).await {
+                    error!("Failed to handle message: {}", e);
+                } else {
+                    info!("Message handled successfully: {}", message_type);
+                }
+            })
         }).await;
+
+        Ok(())
     }
-
-    async fn deserialize_command(&self, data: &str) -> Box<dyn Command> {
-        // Deserialize the JSON string into a Command
-
-        Box::new(crate::domain::commands::Open { account_id: "123".to_string(), customer_id: "cust123".to_string() })
-    }
-
-    // async fn dispatch(&self, command: Box<dyn Command>) {
-    //     let handler = crate::handlers::AccountCommandsHandler::new(self.store.clone());
-    //     handler.handle(&*command).await.unwrap();
-    // }
 }

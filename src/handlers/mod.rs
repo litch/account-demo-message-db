@@ -1,3 +1,3 @@
-pub mod account_commands;
+pub mod account_handler;
 
-// pub use account_commands::AccountCommandsHandler;
+pub use account_handler::AccountHandler;

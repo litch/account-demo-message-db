@@ -1,10 +1,12 @@
 use sqlx::FromRow;
 use chrono::NaiveDateTime;
+use std::pin::Pin;
+use std::future::Future;
 
 use tracing::{error, info, instrument, debug};
 
 use crate::db;
-use crate::domain::message::Message;
+use crate::messaging::message::Message;
 
 #[derive(Debug)]
 pub struct Store {
@@ -16,23 +18,31 @@ impl Store {
         Self { db }
     }
 
-    pub async fn subscribe_to_stream(
+    pub async fn subscribe_to_stream<F>(
         &self,
         stream_name: &str,
-        mut handler: impl FnMut(Message) + Send,
-    ) {
+        mut f: F,
+    ) where
+        F: FnMut(Message) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + 'static,
+    {
         let mut last_position = 0;
         loop {
             let messages = self.get_category_messages(stream_name, Some(last_position+1), None, None, None, None, None).await;
             match messages {
-                Ok(messages) => {
+                Ok(messages) if !messages.is_empty() => {
                     for message in messages {
-                        last_position = message.global_position;
-                        handler(message);
+                        last_position = message.global_position.unwrap_or(last_position);
+                        debug!("Dispatching message with position {}: {:?}", last_position, message);
+                        f(message).await;
+                        debug!("Message with position {} handled successfully", last_position);
                     }
+                },
+                Ok(_) => {
+                    debug!("No new messages at position {}", last_position);
                 },
                 Err(e) => {
                     error!("Failed to fetch messages: {}", e);
+                    break; // or handle error appropriately
                 }
             }
             // sleep a few seconds
@@ -120,16 +130,16 @@ impl Store {
         }
     }
 
-    #[instrument(skip(db))]
-    async fn write_message(
-        db: &db::Db,
+    #[instrument]
+    pub async fn write_message(
+        &self,
         stream_name: &str,
         message_type: &str,
         data: &str,
         metadata: Option<&str>,  // Optional, can be None
         expected_version: Option<i64>  // Optional, can be None for new streams or first message
     ) {
-
+        let db = &self.db;
         let message_id = uuid::Uuid::new_v4();
         let query = r#"
             SELECT write_message($1::varchar, $2::varchar, $3::varchar, $4::jsonb, $5::jsonb, $6::bigint);
