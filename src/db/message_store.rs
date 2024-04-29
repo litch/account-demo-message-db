@@ -1,5 +1,5 @@
-use sqlx::FromRow;
-use chrono::NaiveDateTime;
+
+
 use std::pin::Pin;
 use std::future::Future;
 
@@ -9,11 +9,11 @@ use crate::db;
 use crate::messaging::message::Message;
 
 #[derive(Debug)]
-pub struct Store {
+pub struct MessageStore {
     db: db::Db,
 }
 
-impl Store {
+impl MessageStore {
     pub fn new(db: db::Db) -> Self {
         Self { db }
     }
@@ -51,7 +51,7 @@ impl Store {
     }
 
 
-    #[instrument()]
+    #[instrument]
     async fn get_stream_messages(
         &self,
         stream_name: &str,
@@ -59,6 +59,10 @@ impl Store {
         batch_size: Option<i64>,
         condition: Option<&str>
     ) -> Result<Vec<Message>, sqlx::Error> {
+        if condition.is_some() {
+            error!("Condition is not supported for category messages");
+            return Err(sqlx::Error::Protocol("Condition is not supported for category messages".to_string()));
+        }
         let db = &self.db;
         // Set the search path to include message_store
         sqlx::query("SET search_path TO message_store, public;")
@@ -90,7 +94,7 @@ impl Store {
     }
 
 
-    #[instrument()]
+    #[instrument]
     async fn get_category_messages(
         &self,
         category_name: &str,
@@ -101,6 +105,10 @@ impl Store {
         consumer_group_size: Option<i64>,
         condition: Option<&str>
     ) -> Result<Vec<Message>, sqlx::Error> {
+        if condition.is_some() {
+            error!("Condition is not supported for category messages");
+            return Err(sqlx::Error::Protocol("Condition is not supported for category messages".to_string()));
+        }
         let db = &self.db;
         let query = r#"
             SELECT global_position, position, type AS message_type, data, metadata, time

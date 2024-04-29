@@ -27,9 +27,9 @@ async fn main() {
     let db = db::Db::new(&database_url).await
         .expect("Failed to create database connection pool");
 
-    let store = db::Store::new(db);
+    let message_store = db::MessageStore::new(db);
     let handler = AccountHandler::new();
-    let commands_consumer = consumers::CommandsConsumer::new(store, handler);
+    let commands_consumer = consumers::CommandsConsumer::new(message_store, handler);
     let _ = commands_consumer.start("account:commands").await;
 
 }

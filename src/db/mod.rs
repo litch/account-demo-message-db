@@ -1,6 +1,6 @@
-pub mod db;
-pub mod store;
+pub mod postgres;
+pub mod message_store;
 
 // Re-export key components
-pub use self::db::Db;
-pub use self::store::Store;
+pub use self::postgres::Db;
+pub use self::message_store::MessageStore;

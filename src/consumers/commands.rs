@@ -1,6 +1,4 @@
-// src/consumers/commands.rs
-
-use crate::db::Store;
+use crate::db::MessageStore;
 use crate::messaging::Handler;
 use crate::messaging::Consumer;
 use axum::async_trait;
@@ -9,12 +7,12 @@ use std::sync::Arc;
 
 pub struct CommandsConsumer<T: Handler> {
 
-    store: Store,
+    store: MessageStore,
     handler: T,
 }
 
 impl<T: Handler> CommandsConsumer<T> {
-    pub fn new(store: Store, handler: T) -> Self {
+    pub fn new(store: MessageStore, handler: T) -> Self {
         CommandsConsumer { store, handler }
     }
 }

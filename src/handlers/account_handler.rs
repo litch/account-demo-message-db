@@ -7,6 +7,12 @@ use tracing::info;
 
 pub struct AccountHandler;
 
+impl Default for AccountHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AccountHandler {
     pub fn new() -> AccountHandler {
         AccountHandler
