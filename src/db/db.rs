@@ -1,6 +1,7 @@
 use sqlx::{Pool, Postgres};
 use tracing::{info, instrument};
 
+#[derive(Debug)]
 pub struct Db {
     pool: Pool<Postgres>,
 }

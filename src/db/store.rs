@@ -1,40 +1,62 @@
 use sqlx::FromRow;
 use chrono::NaiveDateTime;
 
-#[derive(Debug, FromRow)]
-struct Message {
-    global_position: i64,
-    position: i64,
-    data: String,
-    metadata: Option<String>,
-    time: NaiveDateTime,
-}
+use tracing::{error, info, instrument, debug};
 
+use crate::db;
+use crate::domain::message::Message;
+
+#[derive(Debug)]
 pub struct Store {
-    db: Db,
+    db: db::Db,
 }
 
 impl Store {
-    pub fn new(db: Db) -> Self {
+    pub fn new(db: db::Db) -> Self {
         Self { db }
     }
 
+    pub async fn subscribe_to_stream(
+        &self,
+        stream_name: &str,
+        mut handler: impl FnMut(Message) + Send,
+    ) {
+        let mut last_position = 0;
+        loop {
+            let messages = self.get_category_messages(stream_name, Some(last_position+1), None, None, None, None, None).await;
+            match messages {
+                Ok(messages) => {
+                    for message in messages {
+                        last_position = message.global_position;
+                        handler(message);
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to fetch messages: {}", e);
+                }
+            }
+            // sleep a few seconds
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    }
 
-    #[instrument(skip(db))]
+
+    #[instrument()]
     async fn get_stream_messages(
-        db: &db::Db,
+        &self,
         stream_name: &str,
         position: Option<i64>,
         batch_size: Option<i64>,
         condition: Option<&str>
     ) -> Result<Vec<Message>, sqlx::Error> {
+        let db = &self.db;
         // Set the search path to include message_store
         sqlx::query("SET search_path TO message_store, public;")
             .execute(db.pool())
             .await?;
 
         let query = r#"
-            SELECT global_position, position, data, metadata, time
+            SELECT global_position, position, type AS message_type, data, metadata, time
             FROM get_stream_messages($1, $2, $3, NULL);
         "#;
 
@@ -58,9 +80,9 @@ impl Store {
     }
 
 
-    #[instrument(skip(db))]
+    #[instrument()]
     async fn get_category_messages(
-        db: &db::Db,
+        &self,
         category_name: &str,
         position: Option<i64>,
         batch_size: Option<i64>,
@@ -69,8 +91,9 @@ impl Store {
         consumer_group_size: Option<i64>,
         condition: Option<&str>
     ) -> Result<Vec<Message>, sqlx::Error> {
+        let db = &self.db;
         let query = r#"
-            SELECT global_position, position, data, metadata, time
+            SELECT global_position, position, type AS message_type, data, metadata, time
             FROM get_category_messages($1, $2, $3, $4, $5, $6, NULL);
         "#;
 
@@ -97,4 +120,33 @@ impl Store {
         }
     }
 
+    #[instrument(skip(db))]
+    async fn write_message(
+        db: &db::Db,
+        stream_name: &str,
+        message_type: &str,
+        data: &str,
+        metadata: Option<&str>,  // Optional, can be None
+        expected_version: Option<i64>  // Optional, can be None for new streams or first message
+    ) {
+
+        let message_id = uuid::Uuid::new_v4();
+        let query = r#"
+            SELECT write_message($1::varchar, $2::varchar, $3::varchar, $4::jsonb, $5::jsonb, $6::bigint);
+        "#;
+        let result = sqlx::query(query)
+            .bind(message_id.to_string())
+            .bind(stream_name)
+            .bind(message_type)
+            .bind(data)
+            .bind(metadata.unwrap_or("null"))
+            .bind(expected_version)
+            .execute(db.pool())
+            .await;
+
+        match result {
+            Ok(_) => info!("Message written successfully"),
+            Err(e) => error!("Failed to write message: {}", e),
+        }
+    }
 }
