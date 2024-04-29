@@ -3,7 +3,7 @@
 use sqlx::FromRow;
 use chrono::NaiveDateTime;
 
-#[derive(Debug, FromRow)]
+#[derive(Debug, FromRow, Clone)]
 pub struct Message {
     pub global_position: Option<i64>,
     pub position: Option<i64>,

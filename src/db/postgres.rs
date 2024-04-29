@@ -1,18 +1,29 @@
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use sqlx::Executor;
+
 use tracing::{info, instrument};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Db {
     pool: Pool<Postgres>,
 }
 
 impl Db {
     pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
-        let pool = sqlx::PgPool::connect(database_url).await?;
-        // Set the search path to use the message_store schema
-        sqlx::query("SET search_path TO message_store, public;")
-            .execute(&pool)
+        let pool = PgPoolOptions::new()
+            .max_connections(10)  // Customize based on your load requirements.
+            .after_connect(|conn, _meta| Box::pin(async move {
+                // Execute multiple statements with one call.
+                conn.execute("SET search_path TO message_store, public;")
+                    .await?;
+
+                Ok(())
+            }))
+
+            .connect(database_url)
             .await?;
+
+        info!("Database connection pool created");
         Ok(Self { pool })
     }
 

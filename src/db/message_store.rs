@@ -8,7 +8,7 @@ use tracing::{error, info, instrument, debug};
 use crate::db;
 use crate::messaging::message::Message;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageStore {
     db: db::Db,
 }
@@ -52,7 +52,7 @@ impl MessageStore {
 
 
     #[instrument]
-    async fn get_stream_messages(
+    pub async fn get_stream_messages(
         &self,
         stream_name: &str,
         position: Option<i64>,
@@ -64,14 +64,10 @@ impl MessageStore {
             return Err(sqlx::Error::Protocol("Condition is not supported for category messages".to_string()));
         }
         let db = &self.db;
-        // Set the search path to include message_store
-        sqlx::query("SET search_path TO message_store, public;")
-            .execute(db.pool())
-            .await?;
 
         let query = r#"
             SELECT global_position, position, type AS message_type, data, metadata, time
-            FROM get_stream_messages($1, $2, $3, NULL);
+            FROM get_stream_messages($1::varchar, $2::bigint, $3::bigint, NULL::varchar);
         "#;
 
         let messages = sqlx::query_as::<_, Message>(query)
