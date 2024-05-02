@@ -1,7 +1,7 @@
 
 use crate::messaging::Message;
 use serde_json::Value;
-use std::fmt;
+
 
 pub trait Command {
     fn from_message(message: Message) -> Result<Self, String> where Self: Sized;

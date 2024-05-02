@@ -8,15 +8,15 @@ use messaging::Consumer;
 
 mod db;
 mod domain;
-mod consumers;
 mod handlers;
 mod messaging;
+mod util;
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
     let subscriber = FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
         .finish();
     tracing::subscriber::set_global_default(subscriber)
         .expect("setting default subscriber failed");
@@ -29,8 +29,9 @@ async fn main() {
 
     let message_store = db::MessageStore::new(db);
     let handler = AccountHandler::new(message_store.clone());
-    let commands_consumer = consumers::CommandsConsumer::new(message_store, handler);
-    let _ = commands_consumer.start("account:commands").await;
+    let position_store = messaging::PositionStore::new(message_store.clone(), "account:commands".to_string(), None);
+    let account_consumer = messaging::CommandsConsumer::new(message_store, position_store, handler);
+    let _ = account_consumer.start("account:commands").await;
 
 }
 

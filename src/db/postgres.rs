@@ -1,13 +1,31 @@
-use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
+use sqlx::{Pool, Postgres, postgres::PgPoolOptions, Error as SqlxError};
 use sqlx::Executor;
-
+use axum::async_trait;
 use tracing::{info, instrument};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+#[async_trait]
+pub trait Database {
+    async fn execute_query(&self, query: &str) -> Result<(), sqlx::Error>;
+}
 
 #[derive(Debug, Clone)]
 pub struct Db {
     pool: Pool<Postgres>,
 }
 
+#[async_trait]
+impl Database for Db {
+    #[instrument]
+    async fn execute_query(&self, query: &str) -> Result<(), sqlx::Error> {
+        info!("Executing query: {}", query);
+        sqlx::query(query)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+}
 impl Db {
     pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
         let pool = PgPoolOptions::new()
@@ -25,16 +43,6 @@ impl Db {
 
         info!("Database connection pool created");
         Ok(Self { pool })
-    }
-
-    #[instrument(skip(self))]
-    pub async fn execute_query(&self) -> Result<(), sqlx::Error> {
-        info!("Executing a sample query");
-        // Example query
-        sqlx::query!("SELECT 1 AS test")
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(())
     }
 
     pub fn pool(&self) -> &Pool<Postgres> {

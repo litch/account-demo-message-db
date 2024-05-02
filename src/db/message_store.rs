@@ -21,11 +21,12 @@ impl MessageStore {
     pub async fn subscribe_to_stream<F>(
         &self,
         stream_name: &str,
+        starting_position: i64,
         mut f: F,
     ) where
         F: FnMut(Message) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + 'static,
     {
-        let mut last_position = 0;
+        let mut last_position = starting_position;
         loop {
             let messages = self.get_category_messages(stream_name, Some(last_position+1), None, None, None, None, None).await;
             match messages {
@@ -161,6 +162,33 @@ impl MessageStore {
         match result {
             Ok(_) => info!("Message written successfully"),
             Err(e) => error!("Failed to write message: {}", e),
+        }
+    }
+
+    pub async fn get_last_message(
+        &self,
+        stream_name: &str
+    ) -> Result<Option<Message>, sqlx::Error> {
+        let db = &self.db;
+        let query = r#"
+            SELECT global_position, position, type AS message_type, data, metadata, time
+            FROM get_last_stream_message($1::varchar);
+        "#;
+
+        let message = sqlx::query_as::<_, Message>(query)
+            .bind(stream_name)
+            .fetch_optional(db.pool())
+            .await;
+
+        match message {
+            Ok(message) => {
+                info!("Last message fetched successfully.");
+                Ok(message)
+            },
+            Err(e) => {
+                error!("Failed to fetch last message: {}", e);
+                Err(e)
+            }
         }
     }
 }
