@@ -10,7 +10,7 @@ use crate::db::MessageStore;
 #[derive(Clone)]
 pub struct AccountStore {
     pub message_store: MessageStore,
-    accounts: hash::HashMap<String, Account>,
+    // accounts: hash::HashMap<String, Account>,
 }
 
 impl AccountStore {
