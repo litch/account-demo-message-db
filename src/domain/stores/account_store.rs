@@ -1,16 +1,13 @@
-
-use core::hash;
-
 use tracing::{info};
 
+use crate::messaging::events::Event;
 use crate::domain::account::Account;
-use crate::domain::events::{Event, Opened};
+use crate::domain::events::Opened;
 use crate::db::MessageStore;
 
 #[derive(Clone)]
 pub struct AccountStore {
     pub message_store: MessageStore,
-    // accounts: hash::HashMap<String, Account>,
 }
 
 impl AccountStore {

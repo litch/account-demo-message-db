@@ -6,8 +6,10 @@ use crate::db::MessageStore;
 
 use tracing::info;
 
-use crate::domain::commands::{Open, Close, Deposit, Withdraw, Command};
-use crate::domain::events::{Event, Opened};
+use crate::messaging::events::Event;
+use crate::messaging::commands::Command;
+use crate::domain::commands::{Open, Close, Deposit, Withdraw};
+use crate::domain::events::Opened;
 use crate::domain::stores::AccountStore;
 use crate::util::Clock;
 
@@ -74,10 +76,10 @@ impl AccountHandler {
             processed_time: Some(processed_time),
             ..opened
         };
+
         let stream_name = format!("account-{}", account_id);
         info!("Generated Opened event: {:?}", opened);
 
-        info!("Want to write this event to {} {}", stream_name, position.unwrap_or(0));
         self.write(&stream_name, opened, position).await.expect("Failed to write event");
 
         Ok(())

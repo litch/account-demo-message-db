@@ -5,7 +5,7 @@ use tracing::{info, debug};
 use crate::db::MessageStore;
 use crate::util::Clock;
 use crate::messaging::Message;
-use crate::domain::events::{Event, Recorded};
+use crate::messaging::events::{Event, Recorded};
 
 #[derive(Clone)]
 pub struct PositionStore {
